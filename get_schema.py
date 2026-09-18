@@ -10,7 +10,7 @@ if url and url.startswith("postgres://"):
 engine = create_engine(url)
 inspector = inspect(engine)
 
-for table in ['encounters', 'conditions', 'medications']:
+for table in ['org_staff', 'role_permissions']:
     print(f"\n--- Schema for: {table} ---")
     for col in inspector.get_columns(table):
         print(f"{col['name']} ({col['type']}) - nullable: {col['nullable']}")
