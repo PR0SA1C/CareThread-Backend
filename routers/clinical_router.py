@@ -41,8 +41,26 @@ def get_patient_timeline(
 
     timeline = {}
     
-    # 3. Tier 2 (Pharmacist), Tier 3 (Doctor/ER), Tier 4 (Psychiatrist), & Patient
-    if dept in ["ORG_PHARMACIST", "ORG_DOCTOR", "ORG_ER", "ORG_PSYCHIATRIST"] or current_user.user_type == "PATIENT":
+    # Tier 2 (Pathology / Radiology): Fetch Documents (Scans / Reports)
+    if dept in ["ORG_PATHOLOGY", "ORG_RADIOLOGY", "ORG_DOCTOR", "ORG_NURSE", "ORG_ER", "ORG_PSYCHIATRIST"] or current_user.user_type == "PATIENT":
+        # We can add an extra filter here based on file_type if we want to get extremely strict
+        # (e.g., Radiology sees DICOM scans and PDF reports, Pathology sees PDF blood reports)
+        doc_filter = ""
+        if dept == "ORG_RADIOLOGY": doc_filter = "AND file_type IN ('application/dicom', 'application/pdf')"
+        elif dept == "ORG_PATHOLOGY": doc_filter = "AND file_type = 'application/pdf'"
+        
+        docs = db.execute(
+            text(f"SELECT id, title, file_type, storage_key, uploaded_at FROM documents WHERE patient_id = :pid {doc_filter}"), 
+            {"pid": patient_uuid}
+        ).fetchall()
+        
+        timeline['documents'] = [
+            {"id": str(r[0]), "title": r[1], "file_type": r[2], "url": r[3], "uploaded_at": r[4]} 
+            for r in docs
+        ]
+
+    # 3. Tier 2 (Pharmacist), Tier 3 (Doctor/Nurse/ER), Tier 4 (Psychiatrist), & Patient
+    if dept in ["ORG_PHARMACIST", "ORG_DOCTOR", "ORG_NURSE", "ORG_ER", "ORG_PSYCHIATRIST"] or current_user.user_type == "PATIENT":
         # Fetch Medications
         meds = db.execute(
             text("SELECT id, name, dosage, frequency, status, start_date FROM medications WHERE patient_id = :pid"), 
@@ -53,8 +71,8 @@ def get_patient_timeline(
             for r in meds
         ]
         
-    # 4. Tier 3 (Doctor/ER), Tier 4 (Psychiatrist), & Patient
-    if dept in ["ORG_DOCTOR", "ORG_ER", "ORG_PSYCHIATRIST"] or current_user.user_type == "PATIENT":
+    # 4. Tier 3 (Doctor/Nurse/ER), Tier 4 (Psychiatrist), & Patient
+    if dept in ["ORG_DOCTOR", "ORG_NURSE", "ORG_ER", "ORG_PSYCHIATRIST"] or current_user.user_type == "PATIENT":
         
         # Enforce Sensitivity Subclass Filter
         # Only Psychiatrists or the Patient themselves can see restricted subclasses (Mental Health)
@@ -80,6 +98,30 @@ def get_patient_timeline(
         timeline['encounters'] = [
             {"id": str(r[0]), "type": r[1], "reason": r[2], "date": r[3]} 
             for r in encs
+        ]
+        
+        # Fetch Vitals
+        vts = db.execute(
+            text("""
+                SELECT id, body_temperature_celsius, blood_pressure_systolic, 
+                       blood_pressure_diastolic, heart_rate_bpm, respiratory_rate_bpm, spo2_percent, recorded_at 
+                FROM vitals WHERE patient_id = :pid
+                ORDER BY recorded_at DESC
+            """), 
+            {"pid": patient_uuid}
+        ).fetchall()
+        timeline['vitals'] = [
+            {
+                "id": str(r[0]), 
+                "temperature": r[1], 
+                "bp_systolic": r[2], 
+                "bp_diastolic": r[3],
+                "heart_rate": r[4],
+                "resp_rate": r[5],
+                "spo2": r[6],
+                "recorded_at": r[7]
+            } 
+            for r in vts
         ]
 
     # Return the aggregated, filtered data

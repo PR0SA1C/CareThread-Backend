@@ -1,13 +1,16 @@
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import APIKeyHeader
 from schemas.auth import UserContext
 from security.jwt_handler import decode_access_token
 from security.permissions import get_allowed_departments
 
-# We can have separate token URLs for Swagger UI if needed, but for now we'll use a generic bearer token
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/org/login")
+# This creates a simple text box in Swagger UI to paste the token
+oauth2_scheme = APIKeyHeader(name="Authorization", auto_error=False)
 
 def get_current_user(token: str = Depends(oauth2_scheme)) -> UserContext:
+    if token and token.lower().startswith("bearer "):
+        token = token[7:]
+        
     payload = decode_access_token(token)
     if payload is None:
         raise HTTPException(

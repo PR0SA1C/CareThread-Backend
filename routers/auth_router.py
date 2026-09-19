@@ -60,8 +60,9 @@ def login_organization(login_data: OrgLogin, db: Session = Depends(get_db)):
     # staff = db.query(Practitioner).filter(Practitioner.abdm_hpr_id == login_data.abdm_hpr_id).first()
     # if not staff: raise 401
     
-    # For this architecture setup, let's pretend they are a Doctor logging in
-    mock_department = "ORG_DOCTOR" # In reality, this is fetched from their DB profile
+    # For testing on Swagger UI: Whatever role you type in the 'password' field is the role you get!
+    # (e.g., type "ORG_PHARMACIST" in the password field to test pharmacist access)
+    mock_department = login_data.password if login_data.password.startswith("ORG_") else "ORG_DOCTOR"
     
     access_token = create_access_token(
         data={
